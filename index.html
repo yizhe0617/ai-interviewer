@@ -1,0 +1,989 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI 面試官</title>
+<style>
+:root {
+  --bg: #f6f7fb;
+  --card: #ffffff;
+  --text: #1d2433;
+  --muted: #667085;
+  --border: #e3e6ee;
+  --primary: #3b5bdb;
+  --primary-soft: #e8edff;
+  --ai-bubble: #f1f3f9;
+  --user-bubble: #3b5bdb;
+  --user-text: #ffffff;
+  --ok: #2b8a3e;
+  --warn: #c77700;
+  --danger: #c92a2a;
+  --shadow: 0 2px 10px rgba(20, 30, 60, .06);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #12141a;
+    --card: #1b1e27;
+    --text: #e6e9f0;
+    --muted: #98a2b3;
+    --border: #2c303c;
+    --primary: #7c93ff;
+    --primary-soft: #252c4a;
+    --ai-bubble: #242836;
+    --user-bubble: #4c63d9;
+    --user-text: #ffffff;
+    --ok: #69db7c;
+    --warn: #ffc078;
+    --danger: #ff8787;
+    --shadow: none;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #12141a; --card: #1b1e27; --text: #e6e9f0; --muted: #98a2b3; --border: #2c303c;
+  --primary: #7c93ff; --primary-soft: #252c4a; --ai-bubble: #242836; --user-bubble: #4c63d9;
+  --user-text: #fff; --ok: #69db7c; --warn: #ffc078; --danger: #ff8787; --shadow: none;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--text);
+  font-family: system-ui, -apple-system, "Segoe UI", "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+  line-height: 1.6;
+}
+header {
+  position: sticky; top: 0; z-index: 5; background: var(--card); border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between; padding: 10px 16px;
+}
+header h1 { font-size: 1.15rem; margin: 0; }
+header .sub { color: var(--muted); font-size: .8rem; }
+main { max-width: 860px; margin: 0 auto; padding: 16px; }
+.card {
+  background: var(--card); border: 1px solid var(--border); border-radius: 14px;
+  padding: 18px; margin-bottom: 16px; box-shadow: var(--shadow);
+}
+.card h2 { margin: 0 0 4px; font-size: 1.05rem; }
+.card .hint { color: var(--muted); font-size: .85rem; margin: 0 0 12px; }
+.step { display: inline-block; background: var(--primary); color: #fff; border-radius: 999px;
+  width: 24px; height: 24px; text-align: center; line-height: 24px; font-size: .8rem; margin-right: 6px; }
+label { display: block; font-size: .85rem; color: var(--muted); margin: 10px 0 4px; }
+input[type=text], input[type=password], select, textarea {
+  width: 100%; padding: 9px 11px; border-radius: 9px; border: 1px solid var(--border);
+  background: var(--bg); color: var(--text); font: inherit;
+}
+textarea { resize: vertical; min-height: 90px; }
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 14px; }
+@media (max-width: 600px) { .grid { grid-template-columns: 1fr; } }
+button {
+  font: inherit; border-radius: 9px; padding: 8px 14px; border: 1px solid var(--border);
+  background: var(--card); color: var(--text); cursor: pointer;
+}
+button:hover { border-color: var(--primary); }
+button.primary { background: var(--primary); color: #fff; border-color: var(--primary); }
+button.ghost { background: transparent; }
+button:disabled { opacity: .5; cursor: not-allowed; }
+.row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 12px; }
+.doc-list { list-style: none; padding: 0; margin: 10px 0 0; }
+.doc-list li { display: flex; justify-content: space-between; align-items: center; gap: 8px;
+  padding: 8px 10px; border: 1px solid var(--border); border-radius: 9px; margin-bottom: 6px; font-size: .9rem; }
+.doc-list li span.meta { color: var(--muted); font-size: .8rem; }
+.dropzone { border: 2px dashed var(--border); border-radius: 12px; padding: 18px; text-align: center;
+  color: var(--muted); cursor: pointer; }
+.dropzone.over { border-color: var(--primary); background: var(--primary-soft); }
+.bank { max-height: 280px; overflow-y: auto; border: 1px solid var(--border); border-radius: 10px; padding: 6px 10px; }
+.bank .group { font-weight: 600; font-size: .85rem; margin: 10px 0 4px; color: var(--primary); }
+.bank label.q { display: flex; gap: 8px; align-items: flex-start; color: var(--text); font-size: .9rem; margin: 4px 0; cursor: pointer; }
+.bank label.q input { margin-top: 5px; }
+.badge { display: inline-block; font-size: .72rem; padding: 1px 8px; border-radius: 999px;
+  background: var(--primary-soft); color: var(--primary); margin-right: 6px; white-space: nowrap; }
+.badge.ai { background: rgba(199,119,0,.15); color: var(--warn); }
+.badge.doc { background: rgba(43,138,62,.15); color: var(--ok); }
+.notice { font-size: .82rem; color: var(--warn); margin-top: 6px; }
+.chat { display: flex; flex-direction: column; gap: 10px; min-height: 260px; max-height: 60vh; overflow-y: auto; padding: 4px; }
+.msg { max-width: 85%; padding: 10px 14px; border-radius: 14px; white-space: pre-wrap; word-break: break-word; }
+.msg.ai { background: var(--ai-bubble); align-self: flex-start; border-top-left-radius: 4px; }
+.msg.user { background: var(--user-bubble); color: var(--user-text); align-self: flex-end; border-top-right-radius: 4px; }
+.msg .reaction { color: var(--muted); font-size: .88rem; display: block; margin-bottom: 4px; }
+.msg .basis { color: var(--muted); font-size: .75rem; display: block; margin-top: 4px; }
+.typing { color: var(--muted); font-size: .85rem; align-self: flex-start; }
+.progress { display: flex; justify-content: space-between; align-items: center; font-size: .85rem; color: var(--muted); margin-bottom: 8px; }
+.bar { height: 6px; background: var(--border); border-radius: 999px; overflow: hidden; margin-bottom: 12px; }
+.bar > div { height: 100%; background: var(--primary); width: 0; transition: width .3s; }
+.answer-box { display: flex; gap: 8px; margin-top: 12px; }
+.answer-box textarea { min-height: 70px; }
+.answer-box button { align-self: flex-end; }
+.score { font-size: 2.6rem; font-weight: 700; color: var(--primary); line-height: 1; }
+.report-item { border: 1px solid var(--border); border-radius: 10px; padding: 12px; margin-top: 10px; }
+.report-item .q { font-weight: 600; }
+.report-item .s { float: right; color: var(--primary); font-weight: 600; }
+.report-item p { margin: 6px 0 0; font-size: .9rem; }
+ul.tight { margin: 4px 0; padding-left: 20px; }
+.error { color: var(--danger); font-size: .88rem; margin-top: 8px; white-space: pre-wrap; }
+.hidden { display: none !important; }
+dialog { border: 1px solid var(--border); border-radius: 14px; background: var(--card); color: var(--text);
+  width: min(480px, calc(100vw - 32px)); padding: 20px; }
+dialog::backdrop { background: rgba(0,0,0,.4); }
+.small { font-size: .8rem; color: var(--muted); }
+a { color: var(--primary); }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>🎓 AI 面試官</h1>
+    <div class="sub">上傳自傳、選擇科系，來一場模擬面試</div>
+  </div>
+  <button id="btnSettings">⚙️ API 設定</button>
+</header>
+
+<main>
+  <!-- 設定階段 -->
+  <section id="setupView">
+    <div class="card">
+      <h2><span class="step">1</span>你的資料</h2>
+      <p class="hint">上傳自傳、研究方向、讀書計畫等（.txt / .pdf），或直接貼上文字。資料只會送給你設定的 AI 服務。</p>
+      <div class="dropzone" id="dropzone">📄 點這裡選擇檔案，或把檔案拖進來
+        <input type="file" id="fileInput" accept=".txt,.md,.pdf,text/plain,application/pdf" multiple hidden>
+      </div>
+      <label for="pasteTitle">或貼上文字</label>
+      <input type="text" id="pasteTitle" placeholder="標題，例如：自傳、研究計畫">
+      <textarea id="pasteText" placeholder="把內容貼在這裡…" style="margin-top:6px"></textarea>
+      <div class="row"><button id="btnAddPaste">＋ 加入這段文字</button></div>
+      <ul class="doc-list" id="docList"></ul>
+      <div class="error" id="docError"></div>
+    </div>
+
+    <div class="card">
+      <h2><span class="step">2</span>面試目標</h2>
+      <p class="hint">學校和科系可以從清單選，也可以自己輸入。</p>
+      <div class="grid">
+        <div>
+          <label for="school">學校</label>
+          <input type="text" id="school" list="schoolList" placeholder="例如：國立臺灣大學">
+          <datalist id="schoolList"></datalist>
+        </div>
+        <div>
+          <label for="dept">科系</label>
+          <input type="text" id="dept" list="deptList" placeholder="例如：資訊工程學系">
+          <datalist id="deptList"></datalist>
+        </div>
+        <div>
+          <label for="category">學群（自動判斷，可修改）</label>
+          <select id="category"></select>
+        </div>
+        <div>
+          <label for="itype">面試類型</label>
+          <select id="itype">
+            <option value="大學個人申請">大學個人申請</option>
+            <option value="研究所推甄／口試">研究所推甄／口試</option>
+            <option value="轉學考／其他">轉學考／其他</option>
+          </select>
+        </div>
+        <div>
+          <label for="style">面試官風格</label>
+          <select id="style">
+            <option value="溫和親切，多給鼓勵">溫和親切</option>
+            <option value="一般正式，專業中立" selected>一般正式</option>
+            <option value="壓力面試，會質疑並深入追問">壓力面試</option>
+          </select>
+        </div>
+        <div>
+          <label for="qnum">主問題數量</label>
+          <select id="qnum">
+            <option value="5" selected>5 題</option>
+            <option value="8">8 題</option>
+            <option value="10">10 題</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2><span class="step">3</span>參考題庫</h2>
+      <p class="hint">勾選你想被問到的題目，AI 會挑選並結合你的資料改寫。</p>
+      <div class="bank" id="bank"></div>
+      <p class="notice">ℹ️ 題庫是整理自 Dcard、PTT 等網路分享中常見的面試題型，並非特定學校的官方題目。網頁無法即時抓取 Dcard，你可以在下方自己加入看到的題目。</p>
+      <label for="customQ">自己加入的題目（一行一題，例如從 Dcard 看到的）</label>
+      <textarea id="customQ" placeholder="例如：如果錄取了，大一暑假你打算做什麼？"></textarea>
+      <div class="row">
+        <button id="btnAiBank">✨ 讓 AI 推測這個學校科系可能的題目</button>
+      </div>
+      <div id="aiBankBox"></div>
+    </div>
+
+    <div class="card">
+      <div class="row" style="margin-top:0;justify-content:space-between">
+        <div class="small" id="readyHint"></div>
+        <div class="row" style="margin-top:0">
+          <button id="btnDemo" class="ghost">離線示範模式</button>
+          <button id="btnStart" class="primary">開始面試 ▶</button>
+        </div>
+      </div>
+      <div class="error" id="startError"></div>
+    </div>
+  </section>
+
+  <!-- 面試階段 -->
+  <section id="interviewView" class="hidden">
+    <div class="card">
+      <div class="progress">
+        <span id="ivTitle"></span>
+        <span id="ivCount"></span>
+      </div>
+      <div class="bar"><div id="ivBar"></div></div>
+      <div class="chat" id="chat"></div>
+      <div class="error" id="chatError"></div>
+      <div class="answer-box">
+        <textarea id="answer" placeholder="輸入你的回答… (Ctrl + Enter 送出)"></textarea>
+        <button id="btnSend" class="primary">送出</button>
+      </div>
+      <div class="row">
+        <button id="btnSkip">跳過這題</button>
+        <button id="btnRetry" class="hidden">重試</button>
+        <button id="btnFinish">結束並看回饋</button>
+        <button id="btnQuit" class="ghost">放棄並返回</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- 回饋階段 -->
+  <section id="reportView" class="hidden">
+    <div class="card" id="reportCard"></div>
+    <div class="row">
+      <button id="btnDownload">⬇️ 下載面試紀錄與回饋</button>
+      <button id="btnAgain" class="primary">再練一次</button>
+    </div>
+  </section>
+</main>
+
+<dialog id="settingsDialog">
+  <h2 style="margin-top:0">API 設定</h2>
+  <p class="small">預設使用免費 AI，不需金鑰。若想更穩定，可改用自己的金鑰；金鑰只存在你這台電腦的瀏覽器裡，不會上傳到 GitHub 或其他地方。</p>
+  <label for="provider">AI 服務</label>
+  <select id="provider">
+    <option value="relay">網站內建 AI（Gemini，不需金鑰）</option>
+    <option value="free">免費 AI（Pollinations，不需金鑰）</option>
+    <option value="gemini">Google Gemini（有免費額度）</option>
+    <option value="openai">OpenAI</option>
+    <option value="claude">Anthropic Claude</option>
+  </select>
+  <div id="keyField">
+  <label for="apiKey">API 金鑰</label>
+  <input type="password" id="apiKey" placeholder="貼上你的 API 金鑰" autocomplete="off">
+  </div>
+  <label for="model">模型名稱</label>
+  <input type="text" id="model">
+  <p class="small" id="keyHelp"></p>
+  <div class="row" style="justify-content:space-between">
+    <button id="btnClearKey" class="ghost">清除金鑰</button>
+    <div class="row" style="margin-top:0">
+      <button id="btnCloseSettings">取消</button>
+      <button id="btnSaveSettings" class="primary">儲存</button>
+    </div>
+  </div>
+</dialog>
+
+<script>
+// ===================== 中繼站 =====================
+// 部署 cloudflare-worker/worker.js 後，把網址貼在這裡（例如 https://ai-interviewer.xxx.workers.dev）
+// 金鑰存在 Cloudflare，不會出現在這個檔案裡。留空則改用免費 AI。
+const RELAY_URL = "https://ai-interviewer.easonh010617.workers.dev";
+
+// ===================== 資料 =====================
+const SCHOOLS = ["國立臺灣大學","國立清華大學","國立陽明交通大學","國立成功大學","國立政治大學","國立臺灣師範大學",
+  "國立中央大學","國立中興大學","國立中山大學","國立中正大學","國立臺灣科技大學","國立臺北科技大學","國立臺北大學",
+  "國立臺灣海洋大學","國立彰化師範大學","國立高雄大學","國立東華大學","長庚大學","輔仁大學","東吳大學","淡江大學",
+  "逢甲大學","東海大學","中原大學","元智大學","銘傳大學","世新大學","文化大學","靜宜大學","義守大學",
+  "高雄醫學大學","臺北醫學大學","中國醫藥大學","中山醫學大學","馬偕醫學院"];
+const DEPTS = ["資訊工程學系","資訊管理學系","電機工程學系","電子工程學系","機械工程學系","化學工程學系","土木工程學系",
+  "醫學系","牙醫學系","藥學系","護理學系","公共衛生學系","物理治療學系","生命科學系","生物科技學系",
+  "數學系","物理學系","化學系","企業管理學系","會計學系","財務金融學系","經濟學系","國際貿易學系",
+  "法律學系","政治學系","外國語文學系","英國語文學系","日本語文學系","中國文學系","歷史學系",
+  "心理學系","社會學系","社會工作學系","教育學系","特殊教育學系","建築學系","工業設計學系","視覺傳達設計學系",
+  "新聞學系","廣播電視學系","大眾傳播學系"];
+
+// 學群 → 判斷關鍵字
+const CATEGORIES = [
+  { id: "cs",   name: "資訊／資管",       kw: ["資訊","資工","資管","電腦","人工智慧","數據","資料科學"] },
+  { id: "ee",   name: "電機／電子／工程", kw: ["電機","電子","機械","化工","化學工程","土木","材料","工程","光電","航太"] },
+  { id: "med",  name: "醫學／牙醫／藥學", kw: ["醫學","牙醫","藥學","中醫"] },
+  { id: "care", name: "護理／公衛／醫技", kw: ["護理","公共衛生","公衛","物理治療","職能","醫技","醫學檢驗","營養","呼吸"] },
+  { id: "bio",  name: "生命科學／農學",   kw: ["生命","生物","生科","農","動物","植物","森林","獸醫"] },
+  { id: "sci",  name: "數理化",           kw: ["數學","物理","化學","統計","應數","地球科學","大氣"] },
+  { id: "biz",  name: "商管／財經",       kw: ["企業","企管","管理","會計","財務","財金","經濟","國貿","貿易","行銷","金融","保險"] },
+  { id: "law",  name: "法律／政治",       kw: ["法律","政治","公共行政","外交"] },
+  { id: "lang", name: "文學／外語／歷史", kw: ["外國語","外文","英國語","英文","日本","日文","中國文學","中文","歷史","哲學","語文","台文","臺灣文學"] },
+  { id: "soc",  name: "社會／心理",       kw: ["心理","社會","社工","人類","輔導"] },
+  { id: "edu",  name: "教育",             kw: ["教育","師資","幼教","特教"] },
+  { id: "art",  name: "設計／建築／藝術", kw: ["設計","建築","藝術","美術","音樂","戲劇","景觀"] },
+  { id: "comm", name: "傳播",             kw: ["新聞","傳播","廣播","廣告","影視","電影"] },
+  { id: "other",name: "其他",             kw: [] }
+];
+
+// 常見題庫（依網路分享常見題型歸納）
+const BANK = {
+  common: ["請用一到兩分鐘自我介紹。","為什麼想選擇本校本系？","你覺得自己有什麼特質適合這個科系？",
+    "請說說你最大的優點和缺點。","高中時期最有成就感的一件事是什麼？","遇過最大的挫折是什麼？你怎麼面對？",
+    "如果沒有錄取本系，你的打算是什麼？","大學四年（或研究所期間）你有什麼規劃？","十年後你希望自己在做什麼？",
+    "最近讀過印象深刻的一本書或一篇文章？","你有什麼問題想問我們嗎？"],
+  grad: ["請簡單說明你的研究計畫與動機。","你預計使用什麼研究方法？為什麼？","你的研究和現有文獻有什麼不同？",
+    "你想跟哪位老師做研究？為什麼？","大學專題遇到最困難的地方是什麼？","畢業後打算讀博士還是就業？",
+    "你的研究有什麼實際應用價值？","如果研究結果不如預期，你會怎麼調整？"],
+  cs: ["你寫過最有成就感的程式或專題是什麼？","你怎麼看待 AI 會取代工程師的說法？","請說明你熟悉的程式語言，以及它的優缺點。",
+    "資料結構中，陣列和鏈結串列有什麼差別？","你自學新技術的方法是什麼？","你覺得資訊安全和個人隱私該怎麼取捨？",
+    "團隊開發中如果和組員意見不合，你會怎麼處理？"],
+  ee: ["為什麼對電機（工程）有興趣？是什麼經驗啟發你？","請說說你做過的科展、專題或實作經驗。",
+    "你覺得台灣半導體產業的優勢與挑戰是什麼？","數學和物理中你最喜歡哪個單元？為什麼？",
+    "如果要設計一個解決生活問題的裝置，你會做什麼？","你如何看待工程倫理？"],
+  med: ["為什麼想當醫師（牙醫、藥師）？","如果病人家屬情緒激動地指責你，你會怎麼處理？","你怎麼看待醫療資源分配不均的問題？",
+    "安樂死你支持還是反對？為什麼？","你如何面對學醫的壓力和長時間的工作？","你有接觸過醫療相關的志工或見習嗎？有什麼收穫？",
+    "AI 在醫療上的應用，你覺得有哪些利弊？","醫病關係中最重要的是什麼？"],
+  care: ["為什麼選擇護理（醫療相關）？","你怎麼看待護理人員過勞的問題？","如果遇到不配合治療的病人你會怎麼做？",
+    "高齡化社會對這個領域有什麼影響？","你有照顧家人或志工的經驗嗎？","你覺得同理心可以培養嗎？"],
+  bio: ["最近有什麼生物科技的新聞讓你印象深刻？","你怎麼看基因編輯（例如 CRISPR）的倫理問題？",
+    "你做過的實驗中，哪一次失敗讓你學到最多？","生物多樣性為什麼重要？","你對永續農業或糧食問題有什麼想法？"],
+  sci: ["你為什麼喜歡數學（物理、化學）？","請舉一個你覺得很美的定理或現象。","學理科對未來職涯有什麼幫助？",
+    "你如何向國中生解釋一個抽象的科學概念？","你有參加過競賽或做過科展嗎？","基礎科學和應用科學哪個比較重要？"],
+  biz: ["你覺得一個好的領導者需要具備什麼特質？","最近有什麼財經新聞讓你印象深刻？","如果給你一百萬，你會怎麼運用？",
+    "請分析一個你喜歡的品牌，它成功的原因是什麼？","你怎麼看待 ESG 與企業社會責任？","通膨或升息對一般人有什麼影響？",
+    "如果你是手搖飲店長，營收下滑你會怎麼做？"],
+  law: ["為什麼想讀法律（政治）？","你怎麼看死刑存廢？","法律和道德衝突時應該怎麼辦？","最近有什麼社會案件讓你有感觸？",
+    "你覺得台灣的民主還有什麼需要改進的地方？","言論自由的界線在哪裡？"],
+  lang: ["你為什麼喜歡這個語言（文學、歷史）？","你最喜歡的作家或作品是哪一個？為什麼？","你學語言的方法是什麼？",
+    "AI 翻譯越來越強，讀外文系還有什麼價值？","請用英文（或該語言）簡單自我介紹。","你覺得文學（歷史）對現代社會有什麼用？"],
+  soc: ["你為什麼對心理學（社會學）有興趣？","你怎麼看待青少年心理健康的問題？","如果朋友向你傾訴想輕生，你會怎麼做？",
+    "社會上有哪個現象是你想深入研究的？","心理學和算命、星座有什麼不同？","你有參與過志工或社區服務嗎？"],
+  edu: ["為什麼想當老師（投入教育）？","你理想中的好老師是什麼樣子？","如果班上有學生霸凌別人你會怎麼處理？",
+    "你怎麼看 108 課綱？","科技對教育帶來什麼改變？","你如何面對學習動機低落的學生？"],
+  art: ["請介紹你作品集中最滿意的一件作品。","你的創作靈感通常來自哪裡？","你最欣賞的設計師（建築師、藝術家）是誰？",
+    "好的設計應該具備什麼條件？","AI 生成圖像對設計產業有什麼影響？","如果要重新設計你的學校，你會改哪裡？"],
+  comm: ["你每天怎麼接收新聞？","你怎麼看假新聞與媒體識讀？","請評論一則最近的新聞報導。","社群媒體對新聞業的影響是什麼？",
+    "如果要拍一支介紹你家鄉的短片，你會怎麼規劃？","你覺得好的記者需要什麼特質？"],
+  other: []
+};
+
+const PROVIDERS = {
+  relay: { model: "gemini-2.5-flash", help: "使用網站提供的 Gemini，不需金鑰。" },
+  free: { model: "openai", help: '使用 <a href="https://pollinations.ai" target="_blank" rel="noopener">Pollinations</a> 的免費 AI，不需金鑰。速度和穩定度不保證，遇到失敗可以稍等再重試，或改用自己的金鑰。' },
+  gemini: { model: "gemini-2.5-flash", help: '到 <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Google AI Studio</a> 免費申請金鑰。' },
+  openai: { model: "gpt-4o-mini", help: '到 <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener">OpenAI 平台</a> 申請金鑰（需付費額度）。' },
+  claude: { model: "claude-haiku-4-5", help: '到 <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">Anthropic Console</a> 申請金鑰（需付費額度）。' }
+};
+
+// ===================== 工具 =====================
+const $ = id => document.getElementById(id);
+const store = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+  del(k) { try { localStorage.removeItem(k); } catch {} }
+};
+function show(view) {
+  ["setupView", "interviewView", "reportView"].forEach(v => $(v).classList.toggle("hidden", v !== view));
+  window.scrollTo(0, 0);
+}
+function el(tag, attrs = {}, ...children) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k === "class") e.className = v; else if (k === "text") e.textContent = v; else e.setAttribute(k, v);
+  }
+  children.forEach(c => e.append(c));
+  return e;
+}
+function parseJSON(text, ok = () => true) {
+  // AI 有時會在 JSON 前後多出雜字，從每個「{」開始嘗試解析
+  const t = String(text || "").replace(/```(?:json)?/gi, "").trim();
+  const e = t.lastIndexOf("}");
+  for (let i = t.indexOf("{"); i >= 0 && i < e; i = t.indexOf("{", i + 1)) {
+    try { const o = JSON.parse(t.slice(i, e + 1)); if (o && typeof o === "object" && ok(o)) return o; } catch {}
+  }
+  // 回覆被截斷時：退回到最後一個完整的 } 或 ]，再補上缺少的括號
+  const start = t.indexOf("{");
+  if (start >= 0) {
+    const cuts = [];
+    let stack = [], inStr = false, esc = false;
+    for (let i = start; i < t.length; i++) {
+      const c = t[i];
+      if (inStr) { if (esc) esc = false; else if (c === "\\") esc = true; else if (c === '"') inStr = false; continue; }
+      if (c === '"') inStr = true;
+      else if (c === "{" || c === "[") stack.push(c === "{" ? "}" : "]");
+      else if (c === "}" || c === "]") { stack.pop(); cuts.push([i, stack.slice()]); }
+    }
+    for (let k = cuts.length - 1; k >= 0; k--) {
+      const [i, st] = cuts[k];
+      try { const o = JSON.parse(t.slice(start, i + 1) + st.reverse().join("")); if (o && typeof o === "object" && ok(o)) return o; } catch {}
+    }
+  }
+  throw new Error("AI 回傳的格式無法解讀，請重試。");
+}
+
+// ===================== 狀態 =====================
+const DEFAULT_PROVIDER = RELAY_URL ? "relay" : "free";
+let settings = store.get("aiiv_settings", { provider: DEFAULT_PROVIDER, key: "", model: PROVIDERS[DEFAULT_PROVIDER].model });
+if (settings.provider === "relay" && !RELAY_URL) settings = { provider: "free", key: "", model: PROVIDERS.free.model };
+const noKey = p => p === "free" || p === "relay";
+const hasAI = () => noKey(settings.provider) || !!settings.key;
+const PNAME = { relay: "網站內建 AI", free: "免費 AI", gemini: "Gemini", openai: "OpenAI", claude: "Claude" };
+let docs = store.get("aiiv_docs", []);
+let aiBank = [];
+let session = null; // 面試中的狀態
+
+// ===================== 設定視窗 =====================
+function openSettings() {
+  $("provider").value = settings.provider;
+  $("apiKey").value = settings.key;
+  $("model").value = settings.model || PROVIDERS[settings.provider].model;
+  $("keyHelp").innerHTML = PROVIDERS[settings.provider].help;
+  $("keyField").classList.toggle("hidden", noKey(settings.provider));
+  $("model").disabled = settings.provider === "relay";
+  $("settingsDialog").showModal();
+}
+$("btnSettings").onclick = openSettings;
+$("provider").onchange = () => {
+  const p = $("provider").value;
+  $("model").value = PROVIDERS[p].model;
+  $("keyHelp").innerHTML = PROVIDERS[p].help;
+  $("keyField").classList.toggle("hidden", noKey(p));
+  $("model").disabled = p === "relay";
+};
+$("btnCloseSettings").onclick = () => $("settingsDialog").close();
+$("btnSaveSettings").onclick = () => {
+  settings = { provider: $("provider").value, key: $("apiKey").value.trim(), model: $("model").value.trim() || PROVIDERS[$("provider").value].model };
+  store.set("aiiv_settings", settings);
+  $("settingsDialog").close();
+  updateReady();
+};
+$("btnClearKey").onclick = () => { $("apiKey").value = ""; settings.key = ""; store.set("aiiv_settings", settings); updateReady(); };
+
+// ===================== 上傳資料 =====================
+let pdfReady = null;
+function loadPdfJs() {
+  if (pdfReady) return pdfReady;
+  const base = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/";
+  pdfReady = new Promise((resolve, reject) => {
+    const s = document.createElement("script");
+    s.src = base + "pdf.min.js";
+    s.onload = async () => {
+      try {
+        // 用 blob 載入 worker，讓直接開啟本機檔案時也能運作
+        const code = await (await fetch(base + "pdf.worker.min.js")).text();
+        window.pdfjsLib.GlobalWorkerOptions.workerSrc = URL.createObjectURL(new Blob([code], { type: "text/javascript" }));
+      } catch { window.pdfjsLib.GlobalWorkerOptions.workerSrc = base + "pdf.worker.min.js"; }
+      resolve(window.pdfjsLib);
+    };
+    s.onerror = () => { pdfReady = null; reject(new Error("無法載入 PDF 讀取工具，請確認網路連線。")); };
+    document.head.append(s);
+  });
+  return pdfReady;
+}
+async function readPdf(file) {
+  const lib = await loadPdfJs();
+  const pdf = await lib.getDocument({ data: await file.arrayBuffer() }).promise;
+  let out = "";
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    const tc = await page.getTextContent();
+    out += tc.items.map(it => it.str).join("") + "\n";
+  }
+  return out.trim();
+}
+async function handleFiles(files) {
+  $("docError").textContent = "";
+  for (const f of files) {
+    try {
+      let text = f.name.toLowerCase().endsWith(".pdf") || f.type === "application/pdf" ? await readPdf(f) : await f.text();
+      text = text.trim();
+      if (!text) throw new Error("讀不到文字（可能是掃描圖片檔）。");
+      addDoc(f.name.replace(/\.[^.]+$/, ""), text);
+    } catch (e) {
+      $("docError").textContent += `「${f.name}」讀取失敗：${e.message}\n`;
+    }
+  }
+}
+function addDoc(title, text) {
+  docs.push({ title: title || `資料 ${docs.length + 1}`, text });
+  store.set("aiiv_docs", docs);
+  renderDocs();
+}
+function renderDocs() {
+  const ul = $("docList");
+  ul.innerHTML = "";
+  docs.forEach((d, i) => {
+    const del = el("button", { class: "ghost", text: "移除" });
+    del.onclick = () => { docs.splice(i, 1); store.set("aiiv_docs", docs); renderDocs(); };
+    ul.append(el("li", {}, el("div", {}, el("strong", { text: d.title }), " ", el("span", { class: "meta", text: `${d.text.length} 字` })), del));
+  });
+  updateReady();
+}
+const dz = $("dropzone");
+dz.onclick = () => $("fileInput").click();
+$("fileInput").onchange = e => { handleFiles([...e.target.files]); e.target.value = ""; };
+dz.ondragover = e => { e.preventDefault(); dz.classList.add("over"); };
+dz.ondragleave = () => dz.classList.remove("over");
+dz.ondrop = e => { e.preventDefault(); dz.classList.remove("over"); handleFiles([...e.dataTransfer.files]); };
+$("btnAddPaste").onclick = () => {
+  const t = $("pasteText").value.trim();
+  if (!t) return;
+  addDoc($("pasteTitle").value.trim(), t);
+  $("pasteText").value = ""; $("pasteTitle").value = "";
+};
+
+// ===================== 目標與題庫 =====================
+SCHOOLS.forEach(s => $("schoolList").append(el("option", { value: s })));
+DEPTS.forEach(s => $("deptList").append(el("option", { value: s })));
+CATEGORIES.forEach(c => $("category").append(el("option", { value: c.id, text: c.name })));
+
+function guessCategory(dept) {
+  for (const c of CATEGORIES) if (c.kw.some(k => dept.includes(k))) return c.id;
+  return "other";
+}
+function bankGroups() {
+  const groups = [];
+  const cat = $("category").value;
+  if (BANK[cat] && BANK[cat].length) groups.push({ name: CATEGORIES.find(c => c.id === cat).name + " 常見題", qs: BANK[cat] });
+  if ($("itype").value.startsWith("研究所")) groups.push({ name: "研究所口試常見題", qs: BANK.grad });
+  groups.push({ name: "通用常見題", qs: BANK.common });
+  return groups;
+}
+function renderBank() {
+  const box = $("bank");
+  const prev = new Set([...box.querySelectorAll("input:checked")].map(i => i.value));
+  box.innerHTML = "";
+  bankGroups().forEach(g => {
+    box.append(el("div", { class: "group", text: g.name }));
+    g.qs.forEach(q => {
+      const cb = el("input", { type: "checkbox", value: q });
+      cb.checked = prev.has(q);
+      box.append(el("label", { class: "q" }, cb, el("span", { text: q })));
+    });
+  });
+}
+$("dept").oninput = () => { $("category").value = guessCategory($("dept").value); renderBank(); saveTarget(); };
+["school", "category", "itype", "style", "qnum", "customQ"].forEach(id => $(id).addEventListener("change", () => { renderBank(); saveTarget(); }));
+function saveTarget() {
+  store.set("aiiv_target", { school: $("school").value, dept: $("dept").value, category: $("category").value,
+    itype: $("itype").value, style: $("style").value, qnum: $("qnum").value, customQ: $("customQ").value });
+}
+function loadTarget() {
+  const t = store.get("aiiv_target", null);
+  if (!t) { $("category").value = "other"; return; }
+  ["school", "dept", "category", "itype", "style", "qnum", "customQ"].forEach(k => { if (t[k] != null) $(k).value = t[k]; });
+}
+
+$("btnAiBank").onclick = async () => {
+  const box = $("aiBankBox");
+  if (!hasAI()) { box.innerHTML = ""; box.append(el("div", { class: "error", text: "請先在右上角「API 設定」輸入金鑰。" })); return; }
+  const btn = $("btnAiBank");
+  btn.disabled = true; btn.textContent = "推測中…";
+  box.innerHTML = "";
+  try {
+    const sys = "你是熟悉台灣升學面試的顧問。請以繁體中文回答，只輸出 JSON。";
+    const prompt = `請推測「${$("school").value || "（未指定學校）"}${$("dept").value || "（未指定科系）"}」${$("itype").value}面試可能會問的 8 個問題，`
+      + `考慮該校該系的特色與網路上（如 Dcard、PTT）考生常分享的題型。輸出格式：{"questions":["題目1","題目2",...]}`;
+    const res = parseJSON(await callAI(sys, [{ role: "user", text: prompt }], true), o => Array.isArray(o.questions));
+    aiBank = (res.questions || []).filter(Boolean);
+    box.append(el("div", { class: "group", text: "AI 推測題（僅供參考）" }));
+    const wrap = el("div", { class: "bank" });
+    aiBank.forEach(q => {
+      const cb = el("input", { type: "checkbox", value: q, "data-ai": "1" });
+      cb.checked = true;
+      wrap.append(el("label", { class: "q" }, cb, el("span", {}, el("span", { class: "badge ai", text: "AI 推測" }), q)));
+    });
+    box.append(wrap);
+  } catch (e) {
+    box.append(el("div", { class: "error", text: "推測失敗：" + e.message }));
+  } finally {
+    btn.disabled = false; btn.textContent = "✨ 讓 AI 推測這個學校科系可能的題目";
+  }
+};
+
+function updateReady() {
+  const parts = [];
+  parts.push(docs.length ? `✅ 已有 ${docs.length} 份資料` : "⚠️ 尚未加入資料（也可以直接開始）");
+  parts.push(noKey(settings.provider) ? `✅ 使用${PNAME[settings.provider]}（不需金鑰）` : settings.key ? `✅ 已設定 ${PNAME[settings.provider]} 金鑰` : "⚠️ 尚未設定 API 金鑰");
+  $("readyHint").textContent = parts.join("　");
+}
+
+// ===================== 呼叫 AI =====================
+let lastFreeCall = 0;
+function setTyping(text) {
+  const t = document.querySelector("#chat .typing");
+  if (t) t.textContent = text;
+  const b = $("btnAiBank");
+  if (b.disabled) b.textContent = text.replace("面試官思考中…", "推測中…");
+}
+async function countdown(sec, msg = "免費 AI 每 30 秒只能回覆一次，排隊中…") {
+  for (let s = sec; s > 0; s--) {
+    setTyping(`${msg} ${s} 秒`);
+    await new Promise(r => setTimeout(r, 1000));
+  }
+  setTyping("面試官思考中…");
+}
+async function callAI(system, messages, json = false) {
+  const { provider, key, model } = settings;
+  if (!key && !noKey(provider)) throw new Error("尚未設定 API 金鑰。");
+  let res, data;
+  if (provider === "relay") {
+    const body = JSON.stringify({ system, messages: messages.map(m => ({ role: m.role, text: m.text })), json });
+    // Gemini 免費額度有每分鐘次數上限，遇到 429 自動排隊重試
+    for (let attempt = 0; attempt < 4; attempt++) {
+      res = await fetch(RELAY_URL, { method: "POST", headers: { "Content-Type": "application/json" }, body });
+      if (res.status !== 429 && res.status < 500) break;
+      if (attempt < 3) await countdown(attempt === 0 ? 15 : 30, "目前使用人數較多，自動排隊中…");
+    }
+    data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(res.status === 429 ? "目前使用人數較多，請稍等一下再按重試。" : (data.error || `HTTP ${res.status}`));
+    return data.text || "";
+  }
+  if (provider === "free") {
+    // 這個免費模型開啟 JSON 模式時常輸出亂碼，所以改用提示詞要求 JSON
+    const body = JSON.stringify({ model: model || "openai", messages: [{ role: "system", content: system + (json ? "\n\n只輸出一個合法的 JSON 物件，不要加任何其他文字或 markdown。" : "") },
+      ...messages.map(m => ({ role: m.role, content: m.text }))], seed: Math.floor(Math.random() * 1e9) });
+    // 免費服務限制：每個 IP 每 30 秒一次回覆，所以必要時先排隊等待
+    for (let attempt = 0; attempt < 4; attempt++) {
+      const wait = Math.ceil((lastFreeCall + 31000 - Date.now()) / 1000);
+      if (wait > 0) await countdown(wait);
+      lastFreeCall = Date.now();
+      res = await fetch("https://text.pollinations.ai/openai", { method: "POST", headers: { "Content-Type": "application/json" }, body });
+      if (res.ok) {
+        data = await res.json().catch(() => ({}));
+        const content = data.choices?.[0]?.message?.content || "";
+        if (content.trim()) { setTyping("面試官思考中…"); return content; }
+        continue;  // 偶爾會回傳空內容，排隊後再試一次
+      }
+      const errText = await res.text().catch(() => "");
+      const m = errText.match(/Retry after (\d+)\s*s/i);
+      if (m || res.status === 429 || /limit/i.test(errText)) { lastFreeCall = Date.now() - 31000 + (m ? +m[1] + 1 : 15) * 1000; continue; }
+      if (res.status >= 500) { await countdown(5); continue; }
+      throw new Error(errText.slice(0, 200) || `HTTP ${res.status}`);
+    }
+    throw new Error("免費 AI 目前太忙，請稍等一下再按重試，或在「API 設定」改用自己的金鑰。");
+  }
+  if (provider === "gemini") {
+    const contents = messages.map(m => ({ role: m.role === "assistant" ? "model" : "user", parts: [{ text: m.text }] }));
+    res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-goog-api-key": key },
+      body: JSON.stringify({ systemInstruction: { parts: [{ text: system }] }, contents,
+        generationConfig: { temperature: 0.8, ...(json ? { responseMimeType: "application/json" } : {}) } })
+    });
+    data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error?.message || `HTTP ${res.status}`);
+    return (data.candidates?.[0]?.content?.parts || []).filter(p => !p.thought).map(p => p.text || "").join("");
+  }
+  if (provider === "openai") {
+    res = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": "Bearer " + key },
+      body: JSON.stringify({ model, messages: [{ role: "system", content: system }, ...messages.map(m => ({ role: m.role, content: m.text }))],
+        ...(json ? { response_format: { type: "json_object" } } : {}) })
+    });
+    data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error?.message || `HTTP ${res.status}`);
+    return data.choices?.[0]?.message?.content || "";
+  }
+  if (provider === "claude") {
+    res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-direct-browser-access": "true" },
+      body: JSON.stringify({ model, max_tokens: 3000, system, messages: messages.map(m => ({ role: m.role, content: m.text })) })
+    });
+    data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error?.message || `HTTP ${res.status}`);
+    return (data.content || []).filter(b => b.type === "text").map(b => b.text).join("");
+  }
+  throw new Error("未知的 AI 服務");
+}
+
+// ===================== 面試 =====================
+function collectTarget() {
+  const picked = [...document.querySelectorAll("#bank input:checked")].map(i => i.value);
+  const aiPicked = [...document.querySelectorAll("#aiBankBox input:checked")].map(i => i.value);
+  const custom = $("customQ").value.split("\n").map(s => s.trim()).filter(Boolean);
+  return {
+    school: $("school").value.trim() || "（未指定學校）",
+    dept: $("dept").value.trim() || "（未指定科系）",
+    category: CATEGORIES.find(c => c.id === $("category").value).name,
+    itype: $("itype").value, style: $("style").value, qnum: +$("qnum").value,
+    picked, aiPicked, custom
+  };
+}
+function buildSystem(t) {
+  const docText = docs.map(d => `【${d.title}】\n${d.text}`).join("\n\n").slice(0, 15000) || "（考生沒有提供資料）";
+  return `你是「${t.school}${t.dept}」的面試官，正在進行「${t.itype}」的模擬面試。風格：${t.style}。全程使用繁體中文。
+
+規則：
+1. 一次只問一個問題，總共 ${t.qnum} 題「主問題」。考生回答後，你可以視情況針對回答「追問」一次（追問不算主問題），或直接進入下一題主問題。
+2. 主問題要混合：根據考生資料出的題目、參考題庫的題目、以及你依該校系特色推想的題目。優先從考生資料中找具體細節來問。
+3. 參考題庫的題目可以結合考生資料改寫，讓問題更具體。
+4. 不要在面試過程中評分或長篇講評，只用一句話簡短回應考生上一個回答。
+5. 每次只輸出 JSON，格式：
+{"reaction":"對上一個回答的一句簡短回應（第一題時留空）","question":"你的問題","type":"main 或 followup","source":"資料 / 題庫 / AI 推測 / 追問 其中之一","basis":"出題依據，15字內，例如：自傳提到的機器人社"}
+
+考生提供的資料：
+${docText}
+
+參考題庫（考生勾選想練習的題目）：
+${t.picked.length ? t.picked.map(q => "- " + q).join("\n") : "（無）"}
+
+AI 推測題：
+${t.aiPicked.length ? t.aiPicked.map(q => "- " + q).join("\n") : "（無）"}
+
+考生自己加入、希望被問到的題目（請盡量問到）：
+${t.custom.length ? t.custom.map(q => "- " + q).join("\n") : "（無）"}`;
+}
+
+function startInterview(demo) {
+  $("startError").textContent = "";
+  if (!demo && !hasAI()) {
+    $("startError").textContent = "請先點右上角「⚙️ API 設定」選擇免費 AI 或輸入金鑰，或使用示範模式。";
+    return;
+  }
+  const t = collectTarget();
+  session = { demo, target: t, system: buildSystem(t), history: [], log: [], mainCount: 0, lastQ: null, pending: false, demoQueue: demo ? buildDemoQueue(t) : null };
+  $("chat").innerHTML = "";
+  $("ivTitle").textContent = `${t.school}・${t.dept}${demo ? "（示範模式）" : ""}`;
+  show("interviewView");
+  saveSession();
+  nextQuestion("請開始面試，先打個招呼並提出第 1 題主問題。");
+}
+$("btnStart").onclick = () => startInterview(false);
+$("btnDemo").onclick = () => startInterview(true);
+
+function updateProgress() {
+  const t = session.target;
+  $("ivCount").textContent = `第 ${Math.min(session.mainCount, t.qnum)} / ${t.qnum} 題`;
+  $("ivBar").style.width = (Math.min(session.mainCount, t.qnum) / t.qnum * 100) + "%";
+}
+function renderAiMsg(q) {
+  const m = el("div", { class: "msg ai" });
+  if (q.reaction) m.append(el("span", { class: "reaction", text: q.reaction }));
+  const cls = q.source === "資料" ? "badge doc" : q.source === "AI 推測" ? "badge ai" : "badge";
+  m.append(el("span", { class: cls, text: q.type === "followup" ? "追問" : (q.source || "提問") }), q.question);
+  if (q.basis) m.append(el("span", { class: "basis", text: "出題依據：" + q.basis }));
+  $("chat").append(m);
+}
+function renderUserMsg(text) { $("chat").append(el("div", { class: "msg user", text })); }
+function scrollChat() { const c = $("chat"); c.scrollTop = c.scrollHeight; }
+function setBusy(b) {
+  session.pending = b;
+  ["btnSend", "btnSkip", "btnFinish"].forEach(id => $(id).disabled = b);
+  let typing = document.querySelector("#chat .typing");
+  if (b && !typing) $("chat").append(el("div", { class: "typing", text: "面試官思考中…" }));
+  if (!b && typing) typing.remove();
+  scrollChat();
+}
+
+async function nextQuestion(userText) {
+  $("chatError").textContent = "";
+  $("btnRetry").classList.add("hidden");
+  session.needRetry = false;
+  session.lastUserText = userText;
+  setBusy(true);
+  try {
+    let q;
+    if (session.demo) {
+      await new Promise(r => setTimeout(r, 500));
+      q = session.demoQueue.shift();
+    } else {
+      const msgs = [...session.history, { role: "user", text: userText }];
+      for (let attempt = 0; attempt < 2 && !(q && (q.question || q.end)); attempt++) {
+        const raw = await callAI(session.system, msgs, true);
+        try { q = parseJSON(raw, o => o.question || o.end); } catch {
+          const m = raw.match(/"question"\s*:\s*"((?:[^"\\]|\\.)+)"/);
+          if (m) q = { question: JSON.parse(`"${m[1]}"`), type: "main", source: "題庫" };
+          else if (!raw.trim().startsWith("{") && raw.trim()) q = { question: raw.trim(), type: "main", source: "題庫" };
+        }
+      }
+      if (!q || !(q.question || q.end)) throw new Error("AI 沒有回傳題目，請重試。");
+      session.history = [...msgs, { role: "assistant", text: JSON.stringify(q) }];
+    }
+    if (q.end) {
+      setBusy(false);
+      renderAiMsg({ reaction: q.reaction, question: q.question || "謝謝你，今天的面試到這裡結束。", type: "followup" });
+      return finishInterview();
+    }
+    if (session.mainCount >= session.target.qnum) q.type = "followup";
+    if (q.type !== "followup") session.mainCount++;
+    session.lastQ = q;
+    session.log.push({ role: "ai", ...q });
+    setBusy(false);
+    renderAiMsg(q);
+    updateProgress();
+    saveSession();
+    scrollChat();
+    $("answer").focus();
+  } catch (e) {
+    setBusy(false);
+    session.needRetry = true;
+    $("chatError").textContent = "發生錯誤：" + e.message + "（請按「重試」）";
+    $("btnRetry").classList.remove("hidden");
+  }
+}
+$("btnRetry").onclick = () => nextQuestion(session.lastUserText);
+
+function submitAnswer(text) {
+  if (!session || session.pending || !session.lastQ || session.needRetry) return;
+  renderUserMsg(text);
+  session.log.push({ role: "user", text });
+  const t = session.target;
+  if (session.mainCount >= t.qnum && (session.lastQ.type === "followup" || session.demo || session.followedLast)) {
+    return finishInterview();
+  }
+  if (session.mainCount >= t.qnum) session.followedLast = true;
+  const remain = t.qnum - session.mainCount;
+  const instr = remain > 0
+    ? `（目前已問 ${session.mainCount}/${t.qnum} 題主問題。請簡短回應，然後追問或提出下一題主問題。）`
+    : `（${t.qnum} 題主問題已全部問完。若有必要可對這個回答追問一次（type 為 followup）；否則請輸出 {"end":true,"reaction":"一句簡短回應","question":"謝謝你，今天的面試到這裡結束。"}。）`;
+  nextQuestion(`考生回答：${text}\n${instr}`);
+}
+$("btnSend").onclick = () => {
+  const text = $("answer").value.trim();
+  if (!text) return;
+  $("answer").value = "";
+  submitAnswer(text);
+};
+$("answer").onkeydown = e => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); $("btnSend").click(); } };
+$("btnSkip").onclick = () => submitAnswer("（考生選擇跳過這題）");
+$("btnFinish").onclick = () => {
+  if (!session.log.some(m => m.role === "user")) { $("chatError").textContent = "至少回答一題才能產生回饋喔。"; return; }
+  finishInterview();
+};
+$("btnQuit").onclick = () => { if (confirm("確定放棄這次面試？")) { session = null; store.del("aiiv_session"); show("setupView"); } };
+
+function saveSession() { if (session) store.set("aiiv_session", session); }
+
+// ===================== 回饋 =====================
+function transcriptText(log) {
+  return log.map(m => m.role === "ai" ? `面試官：${m.reaction ? m.reaction + " " : ""}${m.question}` : `考生：${m.text}`).join("\n");
+}
+async function finishInterview() {
+  setBusy(true);
+  $("chatError").textContent = "";
+  const t = session.target;
+  try {
+    let r;
+    if (session.demo) {
+      await new Promise(res => setTimeout(res, 600));
+      r = demoReport(session.log);
+    } else {
+      const sys = "你是資深的台灣升學面試評審，請根據面試逐字稿給考生具體、可執行的回饋。全程繁體中文，只輸出 JSON。";
+      const prompt = `面試：${t.school}${t.dept}（${t.itype}）
+考生資料摘要：
+${docs.map(d => `【${d.title}】${d.text.slice(0, 1500)}`).join("\n") || "（無）"}
+
+逐字稿：
+${transcriptText(session.log)}
+
+請輸出：
+{"score":0到100的整數,"summary":"整體評語 2-3 句","strengths":["優點1","優點2"],"improvements":["可改進1","可改進2"],
+"items":[{"question":"題目","score":1到10,"comment":"這題回答的評語（30字內）","better":"建議可以怎麼回答（40字內）"}]}
+每個欄位都要精簡。
+跳過或沒回答的題目給低分並給出建議回答。`;
+      for (let attempt = 0; attempt < 2 && !r; attempt++) {
+        try { r = parseJSON(await callAI(sys, [{ role: "user", text: prompt }], true), o => o.score != null && (o.summary || o.items)); }
+        catch (e) { if (attempt === 1) throw e; }  // 格式錯誤時自動再試一次
+      }
+    }
+    session.report = r;
+    saveSession();
+    setBusy(false);
+    renderReport(r);
+    show("reportView");
+  } catch (e) {
+    setBusy(false);
+    $("chatError").textContent = "產生回饋失敗：" + e.message + "（可以再按一次「結束並看回饋」）";
+  }
+}
+function renderReport(r) {
+  const t = session.target;
+  const c = $("reportCard");
+  c.innerHTML = "";
+  c.append(el("h2", { text: `面試回饋：${t.school}・${t.dept}` }));
+  c.append(el("div", { class: "row" }, el("div", { class: "score", text: String(r.score ?? "-") }), el("div", { class: "small", text: "/ 100 分" })));
+  c.append(el("p", { text: r.summary || "" }));
+  const list = (title, arr) => {
+    if (!arr || !arr.length) return;
+    c.append(el("strong", { text: title }));
+    const ul = el("ul", { class: "tight" });
+    arr.forEach(s => ul.append(el("li", { text: s })));
+    c.append(ul);
+  };
+  list("👍 表現不錯的地方", r.strengths);
+  list("🔧 可以加強的地方", r.improvements);
+  (r.items || []).forEach((it, i) => {
+    const box = el("div", { class: "report-item" });
+    box.append(el("span", { class: "s", text: `${it.score ?? "-"} / 10` }), el("div", { class: "q", text: `Q${i + 1}. ${it.question}` }));
+    if (it.comment) box.append(el("p", { text: "評語：" + it.comment }));
+    if (it.better) box.append(el("p", { text: "建議回答：" + it.better }));
+    c.append(box);
+  });
+  if (session.demo) c.append(el("p", { class: "notice", text: "這是離線示範模式的簡易回饋。按「開始面試」使用 AI，就會根據你的回答內容給出具體評語。" }));
+}
+$("btnDownload").onclick = () => {
+  const r = session.report || {}, t = session.target;
+  const lines = [`AI 面試官｜${t.school} ${t.dept}（${t.itype}）`, `日期：${new Date().toLocaleString("zh-TW")}`, "",
+    "===== 面試逐字稿 =====", transcriptText(session.log), "", "===== 回饋 =====", `總分：${r.score ?? "-"} / 100`, r.summary || "", "",
+    "優點：", ...(r.strengths || []).map(s => "・" + s), "", "可加強：", ...(r.improvements || []).map(s => "・" + s), "",
+    ...(r.items || []).flatMap((it, i) => [`Q${i + 1}. ${it.question}（${it.score ?? "-"}/10）`, `評語：${it.comment || ""}`, `建議回答：${it.better || ""}`, ""])];
+  const a = el("a", { href: URL.createObjectURL(new Blob([lines.join("\n")], { type: "text/plain;charset=utf-8" })), download: `面試紀錄_${t.dept}.txt` });
+  document.body.append(a); a.click(); a.remove();
+};
+$("btnAgain").onclick = () => { session = null; store.del("aiiv_session"); show("setupView"); };
+
+// ===================== 示範模式（不需金鑰） =====================
+function buildDemoQueue(t) {
+  const pool = [...t.custom.map(q => ({ q, source: "題庫", basis: "你自己加入的題目" })),
+    ...t.picked.map(q => ({ q, source: "題庫", basis: "參考題庫" })),
+    ...t.aiPicked.map(q => ({ q, source: "AI 推測", basis: "AI 推測題" }))];
+  // 從資料中挑幾個句子來出題
+  const sentences = docs.flatMap(d => d.text.split(/[。！？\n]/).map(s => s.trim()).filter(s => s.length >= 12 && s.length <= 60).map(s => ({ s, title: d.title })));
+  for (let i = 0; i < 3 && sentences.length; i++) {
+    const pick = sentences.splice(Math.floor(Math.random() * sentences.length), 1)[0];
+    pool.splice(i * 2, 0, { q: `你在${pick.title}中提到「${pick.s}」，可以再具體說明這段經驗，以及它對你的影響嗎？`, source: "資料", basis: pick.title });
+  }
+  const fallback = [...(BANK[$("category").value] || []), ...BANK.common].map(q => ({ q, source: "題庫", basis: "參考題庫" }));
+  const seen = new Set();
+  const list = [...pool, ...fallback].filter(x => !seen.has(x.q) && seen.add(x.q)).slice(0, t.qnum);
+  const reactions = ["", "了解，謝謝你的分享。", "好的。", "嗯，這個想法很有意思。", "謝謝，我們繼續。"];
+  return list.map((x, i) => ({ reaction: reactions[i ? 1 + (i % 4) : 0], question: (i === 0 ? `你好，歡迎來到${t.school}${t.dept}的面試。` : "") + x.q, type: "main", source: x.source, basis: x.basis }));
+}
+function demoReport(log) {
+  const items = [];
+  for (let i = 0; i < log.length; i++) {
+    if (log[i].role !== "ai") continue;
+    const ans = log[i + 1]?.role === "user" ? log[i + 1].text : "";
+    const skipped = !ans || ans.startsWith("（考生選擇跳過");
+    const len = skipped ? 0 : ans.length;
+    const score = skipped ? 2 : len < 30 ? 4 : len < 80 ? 6 : len < 200 ? 8 : 9;
+    items.push({ question: log[i].question, score,
+      comment: skipped ? "這題沒有回答。" : len < 30 ? "回答偏短，面試官可能覺得準備不足。" : len < 80 ? "有回答到重點，但可以再加入具體例子。" : "回答完整，內容充實。",
+      better: "可以用「結論 → 具體經驗 → 學到什麼 → 和這個科系的連結」的順序回答，大約 1 分鐘。" });
+  }
+  const avg = items.length ? items.reduce((s, x) => s + x.score, 0) / items.length : 0;
+  return { score: Math.round(avg * 10), summary: "這是依回答長度估算的簡易回饋，僅供練習流程參考。",
+    strengths: ["完成了一場模擬面試，熟悉了面試流程。"], improvements: ["每題盡量搭配一個具體的經驗或例子。", "回答最後連結到你想讀這個科系的原因。"], items };
+}
+
+// ===================== 初始化 =====================
+if (!RELAY_URL) $("provider").querySelector('option[value="relay"]').remove();
+loadTarget();
+renderDocs();
+renderBank();
+updateReady();
+const saved = store.get("aiiv_session", null);
+if (saved && saved.log && saved.log.length) {
+  if (confirm("偵測到上次未完成的面試，要繼續嗎？")) {
+    session = saved; session.pending = false;
+    $("ivTitle").textContent = `${session.target.school}・${session.target.dept}${session.demo ? "（示範模式）" : ""}`;
+    if (session.report) { renderReport(session.report); show("reportView"); }
+    else {
+      show("interviewView");
+      session.log.forEach(m => m.role === "ai" ? renderAiMsg(m) : renderUserMsg(m.text));
+      updateProgress(); scrollChat();
+      if (session.needRetry || !session.lastQ) { session.needRetry = true; $("btnRetry").classList.remove("hidden"); }
+    }
+  } else store.del("aiiv_session");
+}
+</script>
+</body>
+</html>
