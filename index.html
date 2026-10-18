@@ -117,6 +117,11 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 .report-item .s { float: right; color: var(--primary); font-weight: 600; }
 .report-item p { margin: 6px 0 0; font-size: .9rem; }
 ul.tight { margin: 4px 0; padding-left: 20px; }
+.hint-box { margin-top: 12px; border: 1px solid var(--border); border-left: 4px solid var(--warn); border-radius: 10px; padding: 10px 14px; font-size: .9rem; }
+.hint-box h3 { margin: 0 0 6px; font-size: .95rem; }
+.hint-box details { margin-top: 8px; }
+.hint-box summary { cursor: pointer; color: var(--primary); }
+.hint-box .example { white-space: pre-wrap; background: var(--bg); border-radius: 8px; padding: 8px 10px; margin-top: 6px; }
 .error { color: var(--danger); font-size: .88rem; margin-top: 8px; white-space: pre-wrap; }
 .hidden { display: none !important; }
 dialog { border: 1px solid var(--border); border-radius: 14px; background: var(--card); color: var(--text);
@@ -232,11 +237,13 @@ a { color: var(--primary); }
       <div class="bar"><div id="ivBar"></div></div>
       <div class="chat" id="chat"></div>
       <div class="error" id="chatError"></div>
+      <div class="hint-box hidden" id="hintBox"></div>
       <div class="answer-box">
         <textarea id="answer" placeholder="輸入你的回答… (Ctrl + Enter 送出)"></textarea>
         <button id="btnSend" class="primary">送出</button>
       </div>
       <div class="row">
+        <button id="btnHint">💡 給我提示</button>
         <button id="btnSkip">跳過這題</button>
         <button id="btnRetry" class="hidden">重試</button>
         <button id="btnFinish">結束並看回饋</button>
@@ -803,7 +810,8 @@ function renderUserMsg(text) { $("chat").append(el("div", { class: "msg user", t
 function scrollChat() { const c = $("chat"); c.scrollTop = c.scrollHeight; }
 function setBusy(b) {
   session.pending = b;
-  ["btnSend", "btnSkip", "btnFinish"].forEach(id => $(id).disabled = b);
+  ["btnSend", "btnSkip", "btnFinish", "btnHint"].forEach(id => $(id).disabled = b);
+  if (b) $("hintBox").classList.add("hidden");
   let typing = document.querySelector("#chat .typing");
   if (b && !typing) $("chat").append(el("div", { class: "typing", text: "面試官思考中…" }));
   if (!b && typing) typing.remove();
@@ -881,6 +889,67 @@ $("btnSend").onclick = () => {
 };
 $("answer").onkeydown = e => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); $("btnSend").click(); } };
 $("btnSkip").onclick = () => submitAnswer("（考生選擇跳過這題）");
+
+// ===================== 回答提示 =====================
+function demoHint(q) {
+  return { hints: ["先用一句話直接回答問題，再補充理由。", "舉一個你自己的具體經驗或例子。", "最後連結到你為什麼適合這個科系。"],
+    outline: "結論 → 具體經驗（情境、你做了什麼、結果）→ 學到什麼 → 和科系的連結",
+    example: `（示範模式沒有連 AI，這是通用範例）
+關於「${q.question.slice(0, 30)}…」，我的想法是……。例如我在[某個經驗]中，負責[做了什麼]，最後[得到什麼結果]。這讓我學到[收穫]，也是我想進入這個科系的原因之一。` };
+}
+function renderHint(h) {
+  const box = $("hintBox");
+  box.innerHTML = "";
+  box.append(el("h3", { text: "💡 回答提示" }));
+  if (h.hints && h.hints.length) {
+    const ul = el("ul", { class: "tight" });
+    h.hints.forEach(x => ul.append(el("li", { text: x })));
+    box.append(el("strong", { text: "可以從這些方向回答：" }), ul);
+  }
+  if (h.outline) box.append(el("p", {}, el("strong", { text: "建議架構：" }), h.outline));
+  if (h.example) {
+    const d = el("details");
+    d.append(el("summary", { text: "看範例回答（建議先自己想想再打開）" }), el("div", { class: "example", text: h.example }));
+    const use = el("button", { class: "ghost", text: "把範例放進回答框，再自己修改" });
+    use.onclick = () => { $("answer").value = h.example.replace(/^（示範模式.*）\n/, ""); $("answer").focus(); };
+    d.append(el("div", { class: "row" }, use));
+    box.append(d);
+  }
+  box.classList.remove("hidden");
+}
+$("btnHint").onclick = async () => {
+  if (!session || session.pending || !session.lastQ) return;
+  const q = session.lastQ;
+  if (q.hint) return renderHint(q.hint);
+  const btn = $("btnHint");
+  btn.disabled = true; btn.textContent = "💡 想提示中…";
+  $("chatError").textContent = "";
+  try {
+    let h;
+    if (session.demo) { await new Promise(r => setTimeout(r, 400)); h = demoHint(q); }
+    else {
+      const t = session.target;
+      const sys = "你是台灣升學面試的教練，幫考生想出好的回答方向。全程繁體中文，只輸出 JSON。";
+      const docText = docs.map(d => `【${d.title}】\n${d.text}`).join("\n\n").slice(0, 8000) || "（考生沒有提供資料）";
+      const prompt = `考生正在參加「${t.school}${t.dept}」的${t.itype}面試，面試官問：「${q.question}」
+
+考生的資料：
+${docText}
+
+請幫考生準備這題，輸出：
+{"hints":["回答方向1（20字內）","回答方向2","回答方向3"],"outline":"建議的回答架構（一句話）","example":"一段約 150 字的第一人稱範例回答"}
+範例回答要盡量用考生資料裡的真實經歷。資料裡沒寫到的具體細節（例如用了什麼程式語言、數字、名次、課程名稱）一律不要自己編，改用 [方括號] 標示讓考生自己填，例如「我主要使用 [程式語言]」。`;
+      h = parseJSON(await callAI(sys, [{ role: "user", text: prompt }], true), o => o.hints || o.example);
+    }
+    q.hint = h;
+    saveSession();
+    renderHint(h);
+  } catch (e) {
+    $("chatError").textContent = "提示產生失敗：" + e.message;
+  } finally {
+    btn.disabled = session.pending; btn.textContent = "💡 給我提示";
+  }
+};
 $("btnFinish").onclick = () => {
   if (!session.log.some(m => m.role === "user")) { $("chatError").textContent = "至少回答一題才能產生回饋喔。"; return; }
   finishInterview();
