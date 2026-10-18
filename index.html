@@ -201,7 +201,7 @@ a { color: var(--primary); }
       <h2><span class="step">3</span>參考題庫</h2>
       <p class="hint">勾選你想被問到的題目，AI 會挑選並結合你的資料改寫。</p>
       <div class="bank" id="bank"></div>
-      <p class="notice">ℹ️ 題庫是整理自 Dcard、PTT 等網路分享中常見的面試題型，並非特定學校的官方題目。網頁無法即時抓取 Dcard，你可以在下方自己加入看到的題目。</p>
+      <p class="notice">ℹ️ 內建題庫是常見題型歸納，並非特定學校的官方題目。按下方「上網搜尋歷屆面試題」，AI 會用 Google 搜尋 Dcard、PTT 等考生心得整理出歷屆題並附上來源；你也可以自己加入看到的題目。</p>
       <label for="customQ">自己加入的題目（一行一題，例如從 Dcard 看到的）</label>
       <textarea id="customQ" placeholder="例如：如果錄取了，大一暑假你打算做什麼？"></textarea>
       <div class="row">
@@ -424,6 +424,8 @@ const hasAI = () => noKey(settings.provider) || !!settings.key;
 const PNAME = { relay: "網站內建 AI", free: "免費 AI", gemini: "Gemini", openai: "OpenAI", claude: "Claude" };
 let docs = store.get("aiiv_docs", []);
 let aiBank = [];
+let aiBankKind = "ai";
+let lastSources = [];
 let session = null; // 面試中的狀態
 
 // ===================== 設定視窗 =====================
@@ -568,30 +570,56 @@ function loadTarget() {
   ["school", "dept", "category", "itype", "style", "qnum", "customQ"].forEach(k => { if (t[k] != null) $(k).value = t[k]; });
 }
 
+const canSearch = () => settings.provider === "relay" || (settings.provider === "gemini" && !!settings.key);
+const bankBtnText = () => canSearch() ? "🔎 上網搜尋歷屆面試題（Dcard、PTT 等）" : "✨ 讓 AI 推測這個學校科系可能的題目";
 $("btnAiBank").onclick = async () => {
   const box = $("aiBankBox");
   if (!hasAI()) { box.innerHTML = ""; box.append(el("div", { class: "error", text: "請先在右上角「API 設定」輸入金鑰。" })); return; }
   const btn = $("btnAiBank");
-  btn.disabled = true; btn.textContent = "推測中…";
+  const search = canSearch();
+  btn.disabled = true; btn.textContent = search ? "搜尋中，約需 10 到 30 秒…" : "推測中…";
   box.innerHTML = "";
+  const target = `「${$("school").value || "（未指定學校）"}${$("dept").value || "（未指定科系）"}」${$("itype").value}`;
   try {
-    const sys = "你是熟悉台灣升學面試的顧問。請以繁體中文回答，只輸出 JSON。";
-    const prompt = `請推測「${$("school").value || "（未指定學校）"}${$("dept").value || "（未指定科系）"}」${$("itype").value}面試可能會問的 8 個問題，`
-      + `考慮該校該系的特色與網路上（如 Dcard、PTT）考生常分享的題型。輸出格式：{"questions":["題目1","題目2",...]}`;
-    const res = parseJSON(await callAI(sys, [{ role: "user", text: prompt }], true), o => Array.isArray(o.questions));
-    aiBank = (res.questions || []).filter(Boolean);
-    box.append(el("div", { class: "group", text: "AI 推測題（僅供參考）" }));
+    let res;
+    if (search) {
+      const sys = "你是熟悉台灣升學面試的顧問，請使用 Google 搜尋查資料，以繁體中文回答。";
+      const prompt = `請用 Google 搜尋 Dcard、PTT、部落格等網站上，考生分享的${target}面試心得，整理出「實際被問過」的面試題目，最多 10 題。`
+        + `只列出在搜尋結果中找得到的題目，不要自己編造；如果找不到這個學校科系的心得，可以改找同學群的其他學校，並在 from 註明。`
+        + `最後只輸出 JSON：{"questions":[{"q":"題目","from":"出處簡述，例如 Dcard 2024 清大資工面試心得"}],"note":"一句話說明找到的資料狀況"}`;
+      const raw = await callAI(sys, [{ role: "user", text: prompt }], false, { search: true });
+      res = parseJSON(raw, o => Array.isArray(o.questions));
+      res.questions = res.questions.map(x => typeof x === "string" ? { q: x } : x).filter(x => x && x.q);
+    } else {
+      const sys = "你是熟悉台灣升學面試的顧問。請以繁體中文回答，只輸出 JSON。";
+      const prompt = `請推測${target}面試可能會問的 8 個問題，考慮該校該系的特色與網路上（如 Dcard、PTT）考生常分享的題型。輸出格式：{"questions":["題目1","題目2",...]}`;
+      res = parseJSON(await callAI(sys, [{ role: "user", text: prompt }], true), o => Array.isArray(o.questions));
+      res.questions = res.questions.filter(Boolean).map(q => ({ q }));
+    }
+    aiBank = res.questions;
+    aiBankKind = search ? "web" : "ai";
+    box.append(el("div", { class: "group", text: search ? "網路心得整理的歷屆題（由 AI 搜尋整理，請自行查證）" : "AI 推測題（僅供參考）" }));
+    if (res.note) box.append(el("p", { class: "small", text: res.note }));
     const wrap = el("div", { class: "bank" });
-    aiBank.forEach(q => {
-      const cb = el("input", { type: "checkbox", value: q, "data-ai": "1" });
+    aiBank.forEach(x => {
+      const cb = el("input", { type: "checkbox", value: x.q });
       cb.checked = true;
-      wrap.append(el("label", { class: "q" }, cb, el("span", {}, el("span", { class: "badge ai", text: "AI 推測" }), q)));
+      const span = el("span", {}, el("span", { class: search ? "badge doc" : "badge ai", text: search ? "網路心得" : "AI 推測" }), x.q);
+      if (x.from) span.append(el("span", { class: "basis", text: "出處：" + x.from }));
+      wrap.append(el("label", { class: "q" }, cb, span));
     });
+    if (!aiBank.length) wrap.append(el("p", { class: "small", text: "沒有找到相關題目，可以換個科系名稱再試，或自己加入題目。" }));
     box.append(wrap);
+    if (search && lastSources.length) {
+      box.append(el("div", { class: "group", text: "參考來源" }));
+      const ul = el("ul", { class: "tight small" });
+      lastSources.slice(0, 10).forEach(src => ul.append(el("li", {}, el("a", { href: src.uri, target: "_blank", rel: "noopener", text: src.title || src.uri }))));
+      box.append(ul);
+    }
   } catch (e) {
-    box.append(el("div", { class: "error", text: "推測失敗：" + e.message }));
+    box.append(el("div", { class: "error", text: (search ? "搜尋失敗：" : "推測失敗：") + e.message }));
   } finally {
-    btn.disabled = false; btn.textContent = "✨ 讓 AI 推測這個學校科系可能的題目";
+    btn.disabled = false; btn.textContent = bankBtnText();
   }
 };
 
@@ -600,6 +628,7 @@ function updateReady() {
   parts.push(docs.length ? `✅ 已有 ${docs.length} 份資料` : "⚠️ 尚未加入資料（也可以直接開始）");
   parts.push(noKey(settings.provider) ? `✅ 使用${PNAME[settings.provider]}（不需金鑰）` : settings.key ? `✅ 已設定 ${PNAME[settings.provider]} 金鑰` : "⚠️ 尚未設定 API 金鑰");
   $("readyHint").textContent = parts.join("　");
+  if (!$("btnAiBank").disabled) $("btnAiBank").textContent = bankBtnText();
 }
 
 // ===================== 呼叫 AI =====================
@@ -617,20 +646,25 @@ async function countdown(sec, msg = "免費 AI 每 30 秒只能回覆一次，�
   }
   setTyping("面試官思考中…");
 }
-async function callAI(system, messages, json = false) {
-  const { provider, key, model } = settings;
+async function callAI(system, messages, json = false, opts = {}) {
+  lastSources = [];
+  const provider = opts.provider || settings.provider;
+  const key = settings.key;
+  const model = opts.provider ? PROVIDERS[opts.provider].model : settings.model;
   if (!key && !noKey(provider)) throw new Error("尚未設定 API 金鑰。");
   let res, data;
   if (provider === "relay") {
-    const body = JSON.stringify({ system, messages: messages.map(m => ({ role: m.role, text: m.text })), json });
-    // Gemini 免費額度有每分鐘次數上限，遇到 429 自動排隊重試
-    for (let attempt = 0; attempt < 4; attempt++) {
-      res = await fetch(RELAY_URL, { method: "POST", headers: { "Content-Type": "application/json" }, body });
-      if (res.status !== 429 && res.status < 500) break;
-      if (attempt < 3) await countdown(attempt === 0 ? 15 : 30, "目前使用人數較多，自動排隊中…");
+    const body = JSON.stringify({ system, messages: messages.map(m => ({ role: m.role, text: m.text })), json, search: !!opts.search });
+    res = await fetch(RELAY_URL, { method: "POST", headers: { "Content-Type": "application/json" }, body }).catch(() => null);
+    data = res ? await res.json().catch(() => ({})) : {};
+    if (!res || res.status === 429 || res.status >= 500) {
+      // 內建 Gemini 額度用完或連不上時，自動改用備用免費 AI
+      if (opts.search) throw new Error("今天的搜尋額度已用完，請明天再試，或先使用內建題庫。");
+      setTyping("內建 AI 額度已滿，改用備用免費 AI…");
+      return callAI(system, messages, json, { provider: "free" });
     }
-    data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(res.status === 429 ? "目前使用人數較多，請稍等一下再按重試。" : (data.error || `HTTP ${res.status}`));
+    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+    lastSources = data.sources || [];
     return data.text || "";
   }
   if (provider === "free") {
@@ -663,10 +697,12 @@ async function callAI(system, messages, json = false) {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-goog-api-key": key },
       body: JSON.stringify({ systemInstruction: { parts: [{ text: system }] }, contents,
-        generationConfig: { temperature: 0.8, ...(json ? { responseMimeType: "application/json" } : {}) } })
+        ...(opts.search ? { tools: [{ google_search: {} }] } : {}),
+        generationConfig: { temperature: 0.8, ...(json && !opts.search ? { responseMimeType: "application/json" } : {}) } })
     });
     data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error?.message || `HTTP ${res.status}`);
+    lastSources = (data.candidates?.[0]?.groundingMetadata?.groundingChunks || []).map(c => c.web).filter(Boolean);
     return (data.candidates?.[0]?.content?.parts || []).filter(p => !p.thought).map(p => p.text || "").join("");
   }
   if (provider === "openai") {
@@ -698,13 +734,14 @@ async function callAI(system, messages, json = false) {
 function collectTarget() {
   const picked = [...document.querySelectorAll("#bank input:checked")].map(i => i.value);
   const aiPicked = [...document.querySelectorAll("#aiBankBox input:checked")].map(i => i.value);
+  const aiKind = aiBankKind;
   const custom = $("customQ").value.split("\n").map(s => s.trim()).filter(Boolean);
   return {
     school: $("school").value.trim() || "（未指定學校）",
     dept: $("dept").value.trim() || "（未指定科系）",
     category: CATEGORIES.find(c => c.id === $("category").value).name,
     itype: $("itype").value, style: $("style").value, qnum: +$("qnum").value,
-    picked, aiPicked, custom
+    picked, aiPicked, aiKind, custom
   };
 }
 function buildSystem(t) {
@@ -725,7 +762,7 @@ ${docText}
 參考題庫（考生勾選想練習的題目）：
 ${t.picked.length ? t.picked.map(q => "- " + q).join("\n") : "（無）"}
 
-AI 推測題：
+${t.aiKind === "web" ? "網路心得（Dcard、PTT 等）整理出的歷屆題，出這些題時 source 填「題庫」" : "AI 推測題"}：
 ${t.aiPicked.length ? t.aiPicked.map(q => "- " + q).join("\n") : "（無）"}
 
 考生自己加入、希望被問到的題目（請盡量問到）：
